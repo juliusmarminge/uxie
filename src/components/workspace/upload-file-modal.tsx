@@ -20,7 +20,8 @@ import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { generateClientDropzoneAccept } from "uploadthing/client";
 import { z } from "zod";
-
+// @ts-ignore
+import scribe from "scribe.js-ocr";
 const UploadFileModal = ({
   refetchUserDocs,
   docsCount,
@@ -48,12 +49,66 @@ const UploadFileModal = ({
   const { isLoading: isUrlUploading, mutateAsync: mutateAddDocumentByLink } =
     api.document.addDocumentByLink.useMutation();
 
+  const doOcr = true;
   const {
     startUpload,
     permittedFileInfo,
     isUploading: isUploadthingUploading,
   } = useUploadThing("docUploader", {
-    onClientUploadComplete: () => {
+    onBeforeUploadBegin: async (files) => {
+      console.log("BEFORE UPLOAD BEIGNIS");
+
+      const firstFile = files[0];
+      if (!files || files.length !== 1 || !firstFile) {
+        throw new Error("Please upload a single PDF file.");
+      }
+
+      if (doOcr) {
+        console.time("init");
+        await scribe.init({ pdf: true, ocr: true, font: true });
+        // const params = {
+        //   extractPDFTextNative: optGUI.extractText,
+        //   extractPDFTextOCR: optGUI.extractText,
+        // };
+        console.timeEnd("init");
+        console.time("ocr");
+        scribe.opt.displayMode = "invis";
+
+        await scribe.importFiles(
+          files,
+          // params
+        );
+        await scribe.recognize({
+          mode: "quality",
+          langs: ["eng"],
+          modeAdv: "combined",
+          vanillaMode: true,
+          combineMode: "data",
+        });
+        const data = (await scribe.exportData("pdf")) as string | ArrayBuffer;
+        console.timeEnd("ocr");
+        console.time("convert");
+        const blob = new Blob([data], { type: "application/pdf" });
+        const file = new File([blob], "test.pdf", {
+          type: "application/pdf",
+        });
+        // save file locally
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "test.pdf";
+        a.click();
+
+        console.timeEnd("convert");
+
+        throw new Error("hehehhehehehheh");
+        return [file];
+      }
+
+      return files;
+    },
+
+    onClientUploadComplete: (res) => {
       toast.success("File uploaded successfully.");
     },
     onUploadError: () => {
