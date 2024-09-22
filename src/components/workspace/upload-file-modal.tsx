@@ -57,6 +57,7 @@ const UploadFileModal = ({
   } = useUploadThing("docUploader", {
     onBeforeUploadBegin: async (files) => {
       console.log("BEFORE UPLOAD BEIGNIS");
+      console.time("whole-thing");
 
       const firstFile = files[0];
       if (!files || files.length !== 1 || !firstFile) {
@@ -64,6 +65,7 @@ const UploadFileModal = ({
       }
 
       if (doOcr) {
+        const ab = new Date().getTime();
         console.time("init");
         await scribe.init({ pdf: true, ocr: true, font: true });
         // const params = {
@@ -71,13 +73,19 @@ const UploadFileModal = ({
         //   extractPDFTextOCR: optGUI.extractText,
         // };
         console.timeEnd("init");
-        console.time("ocr");
-        scribe.opt.displayMode = "invis";
 
+        console.time("set-mode");
+        scribe.opt.displayMode = "invis";
+        console.timeEnd("set-mode");
+
+        console.time("import-file");
         await scribe.importFiles(
           files,
           // params
         );
+        console.timeEnd("import-file");
+
+        console.time("recognize");
         await scribe.recognize({
           mode: "quality",
           langs: ["eng"],
@@ -85,8 +93,13 @@ const UploadFileModal = ({
           vanillaMode: true,
           combineMode: "data",
         });
+        console.timeEnd("recog");
+
+        console.time("export-data");
+
         const data = (await scribe.exportData("pdf")) as string | ArrayBuffer;
-        console.timeEnd("ocr");
+        console.timeEnd("export-data");
+
         console.time("convert");
         const blob = new Blob([data], { type: "application/pdf" });
         const file = new File([blob], "test.pdf", {
@@ -100,6 +113,9 @@ const UploadFileModal = ({
         a.click();
 
         console.timeEnd("convert");
+
+        console.timeEnd("whole-thing");
+        console.log("TIME TAKEN", new Date().getTime() - ab);
 
         throw new Error("hehehhehehehheh");
         return [file];
@@ -228,7 +244,7 @@ const UploadFileModal = ({
           <div>
             <p>Import from URL</p>
             <p className="mb-2 text-xs font-normal text-gray-500">
-              Your files are not stored, only the URL is retained, also Supports
+              Your files are not stored, only the URL is retained, also supports
               Google Drive and Dropbox links.
             </p>
 
